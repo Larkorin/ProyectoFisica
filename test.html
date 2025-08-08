@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulación de Colisiones Elásticas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .control-group {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .control-group input {
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            width: 80px;
+            text-align: center;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #canvas {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            display: block;
+            margin: 20px auto;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .stat {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            min-width: 150px;
+            margin: 5px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Simulación de Colisiones Elásticas</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Masa m1 (kg):</label>
+                <input type="number" id="mass1" value="4" min="0.1" step="0.1">
+            </div>
+            <div class="control-group">
+                <label>Masa m2 (kg):</label>
+                <input type="number" id="mass2" value="2" min="0.1" step="0.1">
+            </div>
+            <div class="control-group">
+                <label>Velocidad inicial m1 (m/s):</label>
+                <input type="number" id="velocity1" value="-5" step="0.1">
+            </div>
+            <div class="control-group">
+                <label>Fricción estática (μₛ):</label>
+                <input type="number" id="staticFriction" value="0.0" min="0" max="2" step="0.01">
+            </div>
+            <div class="control-group">
+                <label>Fricción cinética (μₖ):</label>
+                <input type="number" id="kineticFriction" value="0.0" min="0" max="2" step="0.01">
+            </div>
+            <div class="control-group">
+                <label>Velocidad de simulación:</label>
+                <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1" style="width: 120px;">
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <button onclick="startSimulation()">▶️ Iniciar</button>
+            <button onclick="pauseSimulation()">⏸️ Pausar</button>
+            <button onclick="resetSimulation()">🔄 Reiniciar</button>
+        </div>
+        
+        <canvas id="canvas" width="800" height="200"></canvas>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff6b6b;"></div>
+                <span>Bloque m1</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4ecdc4;"></div>
+                <span>Bloque m2</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #333;"></div>
+                <span>Paredes</span>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div>Colisiones Totales</div>
+                <div class="stat-value" id="totalCollisions">0</div>
+            </div>
+            <div class="stat">
+                <div>Colisiones con Pared</div>
+                <div class="stat-value" id="wallCollisions">0</div>
+            </div>
+            <div class="stat">
+                <div>Colisiones entre Bloques</div>
+                <div class="stat-value" id="blockCollisions">0</div>
+            </div>
+            <div class="stat">
+                <div>Fricción μₛ / μₖ</div>
+                <div class="stat-value" id="frictionDisplay">0.0 / 0.0</div>
+            </div>
+            <div class="stat">
+                <div>Tiempo (s)</div>
+                <div class="stat-value" id="time">0.0</div>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div>Energía Cinética Total</div>
+                <div class="stat-value" id="totalKineticEnergy" style="color: #ffd700;">0.0 J</div>
+            </div>
+            <div class="stat">
+                <div>Energía m1 (rojo)</div>
+                <div class="stat-value" id="kineticEnergyM1" style="color: #ff6b6b;">0.0 J</div>
+            </div>
+            <div class="stat">
+                <div>Energía m2 (azul)</div>
+                <div class="stat-value" id="kineticEnergyM2" style="color: #4ecdc4;">0.0 J</div>
+            </div>
+            <div class="stat">
+                <div>Energía Perdida</div>
+                <div class="stat-value" id="energyLost" style="color: #e74c3c;">0.0 J</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let animationId;
+        let isRunning = false;
+        let time = 0;
+        
+        // Propiedades de la simulación
+        let block1, block2;
+        let totalCollisions = 0;
+        let wallCollisions = 0;
+        let blockCollisions = 0;
+        let gravity = 9.81; // m/s²
+        let initialTotalEnergy = 0; // Para calcular energía perdida
+        
+        class Block {
+            constructor(x, y, width, height, mass, velocity, color) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.mass = mass;
+                this.velocity = velocity;
+                this.color = color;
+                this.isMoving = Math.abs(velocity) > 0;
+            }
+            
+            update(dt) {
+                const staticFriction = parseFloat(document.getElementById('staticFriction').value);
+                const kineticFriction = parseFloat(document.getElementById('kineticFriction').value);
+                
+                // Fuerza normal (peso del objeto)
+                const normalForce = this.mass * gravity;
+                
+                if (this.isMoving) {
+                    // Aplicar fricción cinética
+                    const frictionForce = kineticFriction * normalForce;
+                    const frictionAcceleration = frictionForce / this.mass;
+                    
+                    // La fricción actúa opuesta al movimiento
+                    const frictionDirection = this.velocity > 0 ? -1 : 1;
+                    const deltaV = frictionAcceleration * frictionDirection * dt;
+                    
+                    // Aplicar fricción
+                    const newVelocity = this.velocity + deltaV;
+                    
+                    // Si la fricción cambiaría la dirección, el objeto se detiene
+                    if ((this.velocity > 0 && newVelocity <= 0) || (this.velocity < 0 && newVelocity >= 0)) {
+                        this.velocity = 0;
+                        this.isMoving = false;
+                    } else {
+                        this.velocity = newVelocity;
+                    }
+                } else {
+                    // El objeto está en reposo, verificar si alguna fuerza puede vencerlo
+                    // (esto se manejará en las colisiones)
+                }
+                
+                // Actualizar posición
+                this.x += this.velocity * dt * 60; // 60 píxeles por unidad
+                
+                // Actualizar estado de movimiento
+                this.isMoving = Math.abs(this.velocity) > 0.01; // umbral para considerarlo en movimiento
+            }
+            
+            draw() {
+                // Sombra
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(this.x + 3, this.y + 3, this.width, this.height);
+                
+                // Bloque principal
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Borde
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                
+                // Etiqueta de masa y estado
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${this.mass}kg`, this.x + this.width/2, this.y + this.height/2);
+                
+                // Indicador de estado
+                ctx.font = '10px Arial';
+                const status = this.isMoving ? 'MOVIENDO' : 'REPOSO';
+                ctx.fillStyle = this.isMoving ? '#27ae60' : '#e74c3c';
+                ctx.fillText(status, this.x + this.width/2, this.y + this.height/2 + 15);
+                
+                // Flecha de velocidad
+                if (Math.abs(this.velocity) > 0.01) {
+                    const arrowX = this.x + this.width/2;
+                    const arrowY = this.y - 15;
+                    const arrowLength = Math.min(Math.abs(this.velocity) * 10, 40);
+                    const direction = this.velocity > 0 ? 1 : -1;
+                    
+                    ctx.strokeStyle = this.velocity > 0 ? '#27ae60' : '#e74c3c';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(arrowX, arrowY);
+                    ctx.lineTo(arrowX + arrowLength * direction, arrowY);
+                    ctx.lineTo(arrowX + (arrowLength - 8) * direction, arrowY - 5);
+                    ctx.moveTo(arrowX + arrowLength * direction, arrowY);
+                    ctx.lineTo(arrowX + (arrowLength - 8) * direction, arrowY + 5);
+                    ctx.stroke();
+                    
+                    // Velocidad numérica
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(`${this.velocity.toFixed(1)} m/s`, arrowX, arrowY - 25);
+                }
+            }
+            
+            getRight() {
+                return this.x + this.width;
+            }
+            
+            getLeft() {
+                return this.x;
+            }
+        }
+        
+        function initializeSimulation() {
+            const mass1 = parseFloat(document.getElementById('mass1').value);
+            const mass2 = parseFloat(document.getElementById('mass2').value);
+            const velocity1 = parseFloat(document.getElementById('velocity1').value);
+            
+            // Tamaño proporcional a la masa
+            const size1 = Math.max(30, Math.min(60, mass1 * 10));
+            const size2 = Math.max(30, Math.min(60, mass2 * 10));
+            
+            block1 = new Block(600, 100, size1, size1, mass1, velocity1, '#ff6b6b');
+            block2 = new Block(300, 100, size2, size2, mass2, 0, '#4ecdc4');
+            
+            // Calcular energía inicial total
+            initialTotalEnergy = calculateKineticEnergy(block1) + calculateKineticEnergy(block2);
+            
+            totalCollisions = 0;
+            wallCollisions = 0;
+            blockCollisions = 0;
+            time = 0;
+            
+            updateStats();
+        }
+        
+        function elasticCollision(block1, block2) {
+            const staticFriction = parseFloat(document.getElementById('staticFriction').value);
+            const kineticFriction = parseFloat(document.getElementById('kineticFriction').value);
+            
+            // Colisión elástica 1D
+            const m1 = block1.mass;
+            const m2 = block2.mass;
+            const u1 = block1.velocity;
+            const u2 = block2.velocity;
+            
+            const v1 = ((m1 - m2) * u1 + 2 * m2 * u2) / (m1 + m2);
+            const v2 = ((m2 - m1) * u2 + 2 * m1 * u1) / (m1 + m2);
+            
+            // Verificar si la fricción estática puede mantener un objeto en reposo
+            function canOvercomeStaticFriction(block, newVelocity) {
+                if (block.isMoving) return true; // Ya está en movimiento
+                
+                // Fuerza requerida para acelerar el bloque
+                const requiredForce = Math.abs(newVelocity - block.velocity) * block.mass / 0.016;
+                const maxStaticFriction = staticFriction * block.mass * gravity;
+                
+                return requiredForce > maxStaticFriction;
+            }
+            
+            // Aplicar nuevas velocidades solo si pueden vencer la fricción estática
+            if (canOvercomeStaticFriction(block1, v1)) {
+                block1.velocity = v1;
+                block1.isMoving = Math.abs(v1) > 0.01;
+            }
+            
+            if (canOvercomeStaticFriction(block2, v2)) {
+                block2.velocity = v2;
+                block2.isMoving = Math.abs(v2) > 0.01;
+            }
+            
+            blockCollisions++;
+            totalCollisions++;
+        }
+        
+        function wallCollision(block) {
+            const staticFriction = parseFloat(document.getElementById('staticFriction').value);
+            
+            const newVelocity = -block.velocity;
+            
+            // Verificar si puede vencer la fricción estática
+            const requiredForce = Math.abs(newVelocity - block.velocity) * block.mass / 0.016;
+            const maxStaticFriction = staticFriction * block.mass * gravity;
+            
+            if (requiredForce > maxStaticFriction) {
+                block.velocity = newVelocity;
+                block.isMoving = Math.abs(newVelocity) > 0.01;
+            } else {
+                block.velocity = 0;
+                block.isMoving = false;
+            }
+            
+            wallCollisions++;
+            totalCollisions++;
+        }
+        
+        function checkCollisions() {
+            // Verificar y corregir si los bloques han cambiado de posición
+            function enforceBlockOrder() {
+                // m2 (azul) siempre debe estar a la izquierda de m1 (rojo)
+                if (block2.x > block1.x) {
+                    // Los bloques han intercambiado posiciones, corregir
+                    const midPoint = (block1.x + block1.width/2 + block2.x + block2.width/2) / 2;
+                    
+                    // Colocar m2 a la izquierda del punto medio
+                    block2.x = midPoint - block2.width - 2;
+                    // Colocar m1 a la derecha del punto medio
+                    block1.x = midPoint + 2;
+                    
+                    // Activar colisión
+                    return true;
+                }
+                return false;
+            }
+            
+            // Verificar colisión normal entre bloques
+            function checkBlockCollision() {
+                const gap = block1.x - (block2.x + block2.width);
+                
+                // Si los bloques están muy cerca o superpuestos
+                if (gap <= 1) {
+                    // Separar manteniendo el orden correcto
+                    const contactPoint = block2.x + block2.width;
+                    block1.x = contactPoint + 2;
+                    return true;
+                }
+                return false;
+            }
+            
+            // Verificar orden y colisión
+            let collisionOccurred = false;
+            
+            // Primero verificar si mantienen su orden correcto
+            if (enforceBlockOrder()) {
+                collisionOccurred = true;
+            }
+            
+            // Luego verificar colisión normal
+            if (checkBlockCollision()) {
+                collisionOccurred = true;
+            }
+            
+            // Si hubo colisión, aplicar física
+            if (collisionOccurred) {
+                elasticCollision(block1, block2);
+            }
+            
+            // Colisión con la pared izquierda
+            if (block1.getLeft() <= 20) {
+                wallCollision(block1);
+                block1.x = 20;
+            }
+            if (block2.getLeft() <= 20) {
+                wallCollision(block2);
+                block2.x = 20;
+            }
+            
+            // Colisión con la pared derecha
+            if (block1.getRight() >= canvas.width - 20) {
+                wallCollision(block1);
+                block1.x = canvas.width - 20 - block1.width;
+            }
+            if (block2.getRight() >= canvas.width - 20) {
+                wallCollision(block2);
+                block2.x = canvas.width - 20 - block2.width;
+            }
+            
+            // Verificación final para asegurar el orden
+            if (block2.x > block1.x) {
+                // Última verificación de seguridad
+                const temp = block1.x;
+                block1.x = Math.max(block2.x + block2.width + 2, temp);
+            }
+        }
+        
+        function draw() {
+            // Fondo
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Pared izquierda
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, 20, canvas.height);
+            ctx.fillStyle = 'rgba(52, 73, 94, 0.3)';
+            ctx.fillRect(20, 0, 5, canvas.height);
+            
+            // Pared derecha
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(canvas.width - 20, 0, 20, canvas.height);
+            ctx.fillStyle = 'rgba(52, 73, 94, 0.3)';
+            ctx.fillRect(canvas.width - 25, 0, 5, canvas.height);
+            
+            // Suelo
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
+            
+            // Líneas de guía
+            ctx.strokeStyle = 'rgba(149, 165, 166, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            for (let i = 50; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height - 10);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+            
+            // Bloques
+            block1.draw();
+            block2.draw();
+        }
+        
+        function updateStats() {
+            const staticFriction = parseFloat(document.getElementById('staticFriction').value);
+            const kineticFriction = parseFloat(document.getElementById('kineticFriction').value);
+            
+            // Calcular energías cinéticas
+            const energyM1 = calculateKineticEnergy(block1);
+            const energyM2 = calculateKineticEnergy(block2);
+            const totalEnergy = energyM1 + energyM2;
+            const energyLost = Math.max(0, initialTotalEnergy - totalEnergy);
+            
+            document.getElementById('totalCollisions').textContent = totalCollisions;
+            document.getElementById('wallCollisions').textContent = wallCollisions;
+            document.getElementById('blockCollisions').textContent = blockCollisions;
+            document.getElementById('time').textContent = time.toFixed(1);
+            document.getElementById('frictionDisplay').textContent = `${staticFriction.toFixed(2)} / ${kineticFriction.toFixed(2)}`;
+            
+            // Actualizar energías
+            document.getElementById('totalKineticEnergy').textContent = totalEnergy.toFixed(2) + ' J';
+            document.getElementById('kineticEnergyM1').textContent = energyM1.toFixed(2) + ' J';
+            document.getElementById('kineticEnergyM2').textContent = energyM2.toFixed(2) + ' J';
+            document.getElementById('energyLost').textContent = energyLost.toFixed(2) + ' J';
+        }
+        
+        function calculateKineticEnergy(block) {
+            // E_k = (1/2) * m * v²
+            return 0.5 * block.mass * Math.pow(block.velocity, 2);
+        }
+        
+        function animate() {
+            if (!isRunning) return;
+            
+            const speed = parseFloat(document.getElementById('speed').value);
+            const dt = 0.016 * speed; // ~60 FPS
+            
+            time += dt;
+            
+            block1.update(dt);
+            block2.update(dt);
+            
+            checkCollisions();
+            draw();
+            updateStats();
+            
+            // Condiciones de parada
+            const redBlockAtRightWall = block1.getRight() >= canvas.width - 20;
+            const redBlockAtRest = !block1.isMoving;
+            const bothStopped = !block1.isMoving && !block2.isMoving;
+            
+            if (redBlockAtRightWall || redBlockAtRest || bothStopped) {
+                pauseSimulation();
+                setTimeout(() => {
+                    let reason;
+                    if (redBlockAtRightWall) {
+                        reason = '¡El bloque rojo (m1) tocó el muro derecho!';
+                    } else if (redBlockAtRest) {
+                        reason = '¡El bloque rojo (m1) se detuvo por fricción!';
+                    } else {
+                        reason = '¡Ambos bloques se detuvieron por fricción!';
+                    }
+                    alert(`${reason}\nTotal de colisiones: ${totalCollisions}\nTiempo: ${time.toFixed(1)} segundos`);
+                }, 100);
+                return;
+            }
+            
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        function startSimulation() {
+            if (!isRunning) {
+                isRunning = true;
+                animate();
+            }
+        }
+        
+        function pauseSimulation() {
+            isRunning = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+        }
+        
+        function resetSimulation() {
+            pauseSimulation();
+            initializeSimulation();
+            draw();
+        }
+        
+        // Inicializar
+        initializeSimulation();
+        draw();
+        
+        // Event listeners para actualizar la simulación cuando cambien los parámetros
+        document.getElementById('mass1').addEventListener('change', () => {
+            if (!isRunning) {
+                initializeSimulation();
+                draw();
+            }
+        });
+        
+        document.getElementById('mass2').addEventListener('change', () => {
+            if (!isRunning) {
+                initializeSimulation();
+                draw();
+            }
+        });
+        
+        document.getElementById('velocity1').addEventListener('change', () => {
+            if (!isRunning) {
+                initializeSimulation();
+                draw();
+            }
+        });
+        
+        document.getElementById('staticFriction').addEventListener('change', () => {
+            updateStats();
+        });
+        
+        document.getElementById('kineticFriction').addEventListener('change', () => {
+            updateStats();
+        });
+    </script>
+</body>
+</html>
