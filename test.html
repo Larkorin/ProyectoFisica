@@ -152,15 +152,19 @@
             </div>
             <div class="control-group">
                 <label>Velocidad inicial m1 (m/s):</label>
-                <input type="number" id="velocity1" value="-5" step="0.1">
-            </div>
-            <div class="control-group">
-                <label>Fricción estática (μₛ):</label>
-                <input type="number" id="staticFriction" value="0.0" min="0" max="2" step="0.01">
+                <input type="number" id="velocity1" value="5" step="0.1">
             </div>
             <div class="control-group">
                 <label>Fricción cinética (μₖ):</label>
-                <input type="number" id="kineticFriction" value="0.0" min="0" max="2" step="0.01">
+                <input type="number" id="kineticFriction" value="0" min="0" max="2" step="0.01">
+            </div>
+            <div class="control-group">
+                <label>Restitución pared (e):</label>
+                <input type="number" id="wallRestitution" value="1" min="0" max="1" step="0.01">
+            </div>
+            <div class="control-group">
+                <label>Restitución bloques (e):</label>
+                <input type="number" id="blockRestitution" value="1" min="0" max="1" step="0.01">
             </div>
             <div class="control-group">
                 <label>Velocidad de simulación:</label>
@@ -172,6 +176,7 @@
             <button onclick="startSimulation()">▶️ Iniciar</button>
             <button onclick="pauseSimulation()">⏸️ Pausar</button>
             <button onclick="resetSimulation()">🔄 Reiniciar</button>
+            <!-- <button onclick="toggleSound()" id="soundButton">🔊 Sonido ON</button> -->
         </div>
         
         <canvas id="canvas" width="800" height="200"></canvas>
@@ -205,8 +210,12 @@
                 <div class="stat-value" id="blockCollisions">0</div>
             </div>
             <div class="stat">
-                <div>Fricción μₛ / μₖ</div>
-                <div class="stat-value" id="frictionDisplay">0.0 / 0.0</div>
+                <div>Fricción cinética (μₖ)</div>
+                <div class="stat-value" id="frictionDisplay">0.0</div>
+            </div>
+            <div class="stat">
+                <div>Restitución e(pared/bloque)</div>
+                <div class="stat-value" id="restitutionDisplay">1.0 / 1.0</div>
             </div>
             <div class="stat">
                 <div>Tiempo (s)</div>
@@ -250,6 +259,72 @@
         let gravity = 9.81; // m/s²
         let initialTotalEnergy = 0; // Para calcular energía perdida
         
+        // Sistema de audio
+        let audioContext;
+        let soundEnabled = true;
+        
+        function initializeAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.log('Audio no disponible');
+                soundEnabled = false;
+            }
+        }
+        
+        function playCollisionSound(frequency, duration, volume, type = 'sine') {
+            if (!soundEnabled || !audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+        
+        function playBlockCollisionSound(velocity1, velocity2, mass1, mass2) {
+            const relativeSpeed = Math.abs(velocity1 - velocity2);
+            const totalMass = mass1 + mass2;
+            
+            // Frecuencia basada en la masa total (bloques más pesados = sonido más grave)
+            const frequency = Math.max(200, Math.min(800, 800 - totalMass * 20));
+            
+            // Volumen basado en la velocidad relativa
+            const volume = Math.min(0.3, relativeSpeed * 0.05);
+            
+            // Duración basada en el coeficiente de restitución
+            const restitution = parseFloat(document.getElementById('blockRestitution').value);
+            const duration = 0.1 + (1 - restitution) * 0.2;
+            
+            playCollisionSound(frequency, duration, volume, 'square');
+        }
+        
+        function playWallCollisionSound(velocity, mass) {
+            const speed = Math.abs(velocity);
+            
+            // Frecuencia basada en la masa (más grave para masas mayores)
+            const frequency = Math.max(300, Math.min(1200, 1200 - mass * 30));
+            
+            // Volumen basado en la velocidad
+            const volume = Math.min(0.25, speed * 0.04);
+            
+            // Duración basada en el coeficiente de restitución
+            const restitution = parseFloat(document.getElementById('wallRestitution').value);
+            const duration = 0.05 + (1 - restitution) * 0.15;
+            
+            playCollisionSound(frequency, duration, volume, 'sawtooth');
+        }
+        
         class Block {
             constructor(x, y, width, height, mass, velocity, color) {
                 this.x = x;
@@ -263,7 +338,6 @@
             }
             
             update(dt) {
-                const staticFriction = parseFloat(document.getElementById('staticFriction').value);
                 const kineticFriction = parseFloat(document.getElementById('kineticFriction').value);
                 
                 // Fuerza normal (peso del objeto)
@@ -288,9 +362,6 @@
                     } else {
                         this.velocity = newVelocity;
                     }
-                } else {
-                    // El objeto está en reposo, verificar si alguna fuerza puede vencerlo
-                    // (esto se manejará en las colisiones)
                 }
                 
                 // Actualizar posición
@@ -362,7 +433,7 @@
         function initializeSimulation() {
             const mass1 = parseFloat(document.getElementById('mass1').value);
             const mass2 = parseFloat(document.getElementById('mass2').value);
-            const velocity1 = parseFloat(document.getElementById('velocity1').value);
+            const velocity1 = -parseFloat(document.getElementById('velocity1').value);
             
             // Tamaño proporcional a la masa
             const size1 = Math.max(30, Math.min(60, mass1 * 10));
@@ -383,60 +454,48 @@
         }
         
         function elasticCollision(block1, block2) {
-            const staticFriction = parseFloat(document.getElementById('staticFriction').value);
             const kineticFriction = parseFloat(document.getElementById('kineticFriction').value);
+            const restitution = parseFloat(document.getElementById('blockRestitution').value);
             
-            // Colisión elástica 1D
+            // Velocidades antes de la colisión
             const m1 = block1.mass;
             const m2 = block2.mass;
             const u1 = block1.velocity;
             const u2 = block2.velocity;
             
-            const v1 = ((m1 - m2) * u1 + 2 * m2 * u2) / (m1 + m2);
-            const v2 = ((m2 - m1) * u2 + 2 * m1 * u1) / (m1 + m2);
+            // Reproducir sonido de colisión entre bloques
+            playBlockCollisionSound(u1, u2, m1, m2);
             
-            // Verificar si la fricción estática puede mantener un objeto en reposo
-            function canOvercomeStaticFriction(block, newVelocity) {
-                if (block.isMoving) return true; // Ya está en movimiento
-                
-                // Fuerza requerida para acelerar el bloque
-                const requiredForce = Math.abs(newVelocity - block.velocity) * block.mass / 0.016;
-                const maxStaticFriction = staticFriction * block.mass * gravity;
-                
-                return requiredForce > maxStaticFriction;
-            }
+            // Velocidad relativa antes de la colisión
+            const relativeVelocity = u1 - u2;
             
-            // Aplicar nuevas velocidades solo si pueden vencer la fricción estática
-            if (canOvercomeStaticFriction(block1, v1)) {
-                block1.velocity = v1;
-                block1.isMoving = Math.abs(v1) > 0.01;
-            }
+            // Colisión con coeficiente de restitución
+            const factor = (1 + restitution) / (m1 + m2);
+            const v1 = u1 - factor * m2 * relativeVelocity;
+            const v2 = u2 + factor * m1 * relativeVelocity;
             
-            if (canOvercomeStaticFriction(block2, v2)) {
-                block2.velocity = v2;
-                block2.isMoving = Math.abs(v2) > 0.01;
-            }
+            // Aplicar nuevas velocidades
+            block1.velocity = v1;
+            block1.isMoving = Math.abs(v1) > 0.01;
+            
+            block2.velocity = v2;
+            block2.isMoving = Math.abs(v2) > 0.01;
             
             blockCollisions++;
             totalCollisions++;
         }
         
         function wallCollision(block) {
-            const staticFriction = parseFloat(document.getElementById('staticFriction').value);
+            const wallRestitution = parseFloat(document.getElementById('wallRestitution').value);
             
-            const newVelocity = -block.velocity;
+            // Reproducir sonido de colisión con pared
+            playWallCollisionSound(block.velocity, block.mass);
             
-            // Verificar si puede vencer la fricción estática
-            const requiredForce = Math.abs(newVelocity - block.velocity) * block.mass / 0.016;
-            const maxStaticFriction = staticFriction * block.mass * gravity;
+            // Aplicar coeficiente de restitución a la velocidad
+            const newVelocity = -block.velocity * wallRestitution;
             
-            if (requiredForce > maxStaticFriction) {
-                block.velocity = newVelocity;
-                block.isMoving = Math.abs(newVelocity) > 0.01;
-            } else {
-                block.velocity = 0;
-                block.isMoving = false;
-            }
+            block.velocity = newVelocity;
+            block.isMoving = Math.abs(newVelocity) > 0.01;
             
             wallCollisions++;
             totalCollisions++;
@@ -560,8 +619,9 @@
         }
         
         function updateStats() {
-            const staticFriction = parseFloat(document.getElementById('staticFriction').value);
             const kineticFriction = parseFloat(document.getElementById('kineticFriction').value);
+            const wallRestitution = parseFloat(document.getElementById('wallRestitution').value);
+            const blockRestitution = parseFloat(document.getElementById('blockRestitution').value);
             
             // Calcular energías cinéticas
             const energyM1 = calculateKineticEnergy(block1);
@@ -573,7 +633,8 @@
             document.getElementById('wallCollisions').textContent = wallCollisions;
             document.getElementById('blockCollisions').textContent = blockCollisions;
             document.getElementById('time').textContent = time.toFixed(1);
-            document.getElementById('frictionDisplay').textContent = `${staticFriction.toFixed(2)} / ${kineticFriction.toFixed(2)}`;
+            document.getElementById('frictionDisplay').textContent = kineticFriction.toFixed(2);
+            document.getElementById('restitutionDisplay').textContent = `${wallRestitution.toFixed(2)} / ${blockRestitution.toFixed(2)}`;
             
             // Actualizar energías
             document.getElementById('totalKineticEnergy').textContent = totalEnergy.toFixed(2) + ' J';
@@ -628,6 +689,10 @@
         
         function startSimulation() {
             if (!isRunning) {
+                // Inicializar audio la primera vez
+                if (!audioContext) {
+                    initializeAudio();
+                }
                 isRunning = true;
                 animate();
             }
@@ -646,7 +711,15 @@
             draw();
         }
         
+        // function toggleSound() {
+        //     soundEnabled = !soundEnabled;
+        //     const button = document.getElementById('soundButton');
+        //     button.textContent = soundEnabled ? '🔊 Sonido ON' : '🔇 Sonido OFF';
+        //     button.style.opacity = soundEnabled ? '1' : '0.6';
+        // }
+        
         // Inicializar
+        initializeAudio();
         initializeSimulation();
         draw();
         
@@ -677,6 +750,14 @@
         });
         
         document.getElementById('kineticFriction').addEventListener('change', () => {
+            updateStats();
+        });
+        
+        document.getElementById('wallRestitution').addEventListener('change', () => {
+            updateStats();
+        });
+        
+        document.getElementById('blockRestitution').addEventListener('change', () => {
             updateStats();
         });
     </script>
