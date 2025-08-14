@@ -1,1 +1,1 @@
-
+Para abrir la simulación, es necesario buscar el directorio del proyecto en el explorador de archivos y buscar el archivo "proyecto.html" y abrirlo para ser redirigido a la página web con la simulación
